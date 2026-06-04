@@ -22,6 +22,7 @@ WARP_GEO=(
 #Черные списки:
 #  "geosite:category-ip-geo-detect"
   "geosite:telegram"
+  "geoip:telegram"
   "geosite:reddit"
 
 #Белые списки:
