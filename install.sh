@@ -27,6 +27,7 @@ WARP_GEO=(
 
 #Белые списки:
     "geosite:google"
+    "geosite:alphabet"
     "geosite:category-ai-!cn"
     "domain:metal-tracker.com"
     "domain:voidboost.cc"
