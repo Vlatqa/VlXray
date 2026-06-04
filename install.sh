@@ -243,7 +243,7 @@ gen_client_json() {
       { "type": "field", "protocol": ["bittorrent"], "outboundTag": "direct" },
       { "type": "field", "ip": ["geoip:private"], "outboundTag": "direct" },
       { "type": "field", "domain": ["geosite:category-ru"], "outboundTag": "direct" },
-      { "type": "field", "geoip": ["geoip:ru"], "outboundTag": "direct" }
+      { "type": "field", "ip": ["geoip:ru"], "outboundTag": "direct" }
     ]
   }
 }
