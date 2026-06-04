@@ -183,6 +183,7 @@ dns:
     - "+.local"
     - "+.internal"
     - "geosite:category-ru"
+    - "geoip:ru"
   nameserver:
     - system
 
@@ -213,6 +214,7 @@ rules:
   - PROCESS-NAME,qBittorrent.exe,DIRECT
   - GEOIP,private,DIRECT,no-resolve
   - GEOSITE,category-ru,DIRECT
+  - GEOIP,ru,DIRECT
   - MATCH,PROXY
 EOF
 }
@@ -239,7 +241,8 @@ gen_client_json() {
     "rules": [
       { "type": "field", "protocol": ["bittorrent"], "outboundTag": "direct" },
       { "type": "field", "ip": ["geoip:private"], "outboundTag": "direct" },
-      { "type": "field", "domain": ["geosite:category-ru"], "outboundTag": "direct" }
+      { "type": "field", "domain": ["geosite:category-ru"], "outboundTag": "direct" },
+      { "type": "field", "ip": ["geoip:ru"], "outboundTag": "direct" }
     ]
   }
 }
