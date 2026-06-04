@@ -21,17 +21,17 @@ PROXY_NAME="VlessExtra"
 WARP_GEO=(
 #Черные списки:
 #  "geosite:category-ip-geo-detect"
-  "geosite:telegram"
-  "geoip:telegram"
-  "geosite:reddit"
+#  "geosite:telegram"
+#  "geoip:telegram"
+#  "geosite:reddit"
 
 #Белые списки:
-#    "geosite:google"
-#    "geosite:category-ai-!cn"
-#    "domain:metal-tracker.com"
-#    "domain:voidboost.cc"
-#    "domain:sambray.org"
-#    "domain:alicdn.com"
+    "geosite:google"
+    "geosite:category-ai-!cn"
+    "domain:metal-tracker.com"
+    "domain:voidboost.cc"
+    "domain:sambray.org"
+    "domain:alicdn.com"
 )
 
 # ─────────── РЕЖИМ WARP: раскомментируй ОДИН вариант ───────────
