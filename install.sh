@@ -26,7 +26,6 @@ WARP_GEO=(
 #  "geosite:reddit"
 
 #Белые списки:
-    "geosite:google"
     "geosite:alphabet"
     "geosite:category-ai-!cn"
     "domain:metal-tracker.com"
