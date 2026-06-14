@@ -20,7 +20,7 @@ PROXY_NAME="VlessExtra"
 # Категории/домены для WARP (синтаксис Xray: geosite:/domain:).
 WARP_GEO=(
 #Черные списки:
-#  "geosite:category-ip-geo-detect"
+  "geosite:category-ip-geo-detect"
 #  "geosite:telegram"
 #  "geoip:telegram"
   "geosite:reddit"
