@@ -24,6 +24,7 @@ WARP_GEO=(
 #  "geosite:telegram"
 #  "geoip:telegram"
   "geosite:reddit"
+  "domain:voidboost.cc"
 
 #Белые списки:
 #    "geosite:alphabet"
