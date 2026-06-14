@@ -20,19 +20,19 @@ PROXY_NAME="VlessExtra"
 # Категории/домены для WARP (синтаксис Xray: geosite:/domain:).
 WARP_GEO=(
 #Черные списки:
-  "geosite:category-ip-geo-detect"
+#  "geosite:category-ip-geo-detect"
 #  "geosite:telegram"
 #  "geoip:telegram"
-  "geosite:reddit"
+#  "geosite:reddit"
 
 #Белые списки:
-#    "geosite:alphabet"
-#    "geosite:category-ai-!cn"
-#    "domain:metal-tracker.com"
-#    "domain:voidboost.cc"
-#    "domain:sambray.org"
-#    "domain:alicdn.com"
-#    "domain:ixbt.com"
+    "geosite:alphabet"
+    "geosite:category-ai-!cn"
+    "domain:metal-tracker.com"
+    "domain:voidboost.cc"
+    "domain:sambray.org"
+    "domain:alicdn.com"
+    "domain:ixbt.com"
 )
 
 # ─────────── РЕЖИМ WARP: раскомментируй ОДИН вариант ───────────
@@ -41,9 +41,9 @@ WARP_GEO=(
 # 2) через WARP только домены/категории из WARP_GEO:
 #WARP_MODE="domains"
 # 3) через WARP всё, КРОМЕ доменов/категорий из WARP_GEO:
-#WARP_MODE="all-except"
+WARP_MODE="all-except"
 # 4) WARP выключен, весь трафик прямым IP сервера:
-WARP_MODE="off"
+#WARP_MODE="off"
 # ───────────────────────────────────────────────────────────────
 
 save_state() {
