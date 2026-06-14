@@ -26,13 +26,13 @@ WARP_GEO=(
   "geosite:reddit"
 
 #Белые списки:
-    "geosite:alphabet"
-    "geosite:category-ai-!cn"
-    "domain:metal-tracker.com"
-    "domain:voidboost.cc"
-    "domain:sambray.org"
-    "domain:alicdn.com"
-    "domain:ixbt.com"
+#    "geosite:alphabet"
+#    "geosite:category-ai-!cn"
+#    "domain:metal-tracker.com"
+#    "domain:voidboost.cc"
+#    "domain:sambray.org"
+#    "domain:alicdn.com"
+#    "domain:ixbt.com"
 )
 
 # ─────────── РЕЖИМ WARP: раскомментируй ОДИН вариант ───────────
