@@ -41,9 +41,9 @@ WARP_GEO=(
 # 1) всё через WARP:
 #WARP_MODE="all"
 # 2) через WARP только домены/категории из WARP_GEO:
-WARP_MODE="domains"
+#WARP_MODE="domains"
 # 3) через WARP всё, КРОМЕ доменов/категорий из WARP_GEO:
-#WARP_MODE="all-except"
+WARP_MODE="all-except"
 # 4) WARP выключен, весь трафик прямым IP сервера:
 #WARP_MODE="off"
 # ───────────────────────────────────────────────────────────────
