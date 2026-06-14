@@ -24,7 +24,6 @@ WARP_GEO=(
 #  "geosite:telegram"
 #  "geoip:telegram"
   "geosite:reddit"
-  "domain:rezka.ag"
 
 #Белые списки:
 #    "geosite:alphabet"
