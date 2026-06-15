@@ -133,7 +133,7 @@ gen_xray_config() {
         "security": "reality",
         "realitySettings": { "show": false, "dest": "$REALITY_DEST:443", "xver": 0, "serverNames": ["$REALITY_SNI"], "privateKey": "$PRIV", "shortIds": ["$SHORTID"] }
       },
-      "sniffing": { "enabled": true, "destOverride": ["http", "tls", "quic"] }
+      "sniffing": { "enabled": true, "destOverride": ["http", "tls", "quic"], "routeOnly": true }
     }
   ],
   "outbounds": [
@@ -198,6 +198,7 @@ proxies:
     uuid: $UUID
     network: tcp
     udp: true
+    packet-encoding: xudp
     tls: true
     flow: xtls-rprx-vision
     servername: $REALITY_SNI
