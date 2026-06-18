@@ -19,17 +19,19 @@ PROXY_NAME="VlessExtra"
 
 # Категории/домены для WARP (синтаксис Xray: geosite:/domain:).
 WARP_GEO=(
-#Черные списки:
+###Черные списки:
+#################
 #  "geosite:category-ip-geo-detect"
 #  "geosite:telegram"
 #  "geoip:telegram"
 #  "geosite:reddit"
 
-#Белые списки:
-  "geosite:telegram"
-  "geoip:telegram"
+###Белые списки:
+################
+    "geosite:telegram"
+    "geoip:telegram"
     "geosite:alphabet"
-    "geosite:category-ai-!cn"
+#    "geosite:category-ai-!cn"
     "domain:metal-tracker.com"
     "domain:voidboost.cc"
     "domain:sambray.org"
