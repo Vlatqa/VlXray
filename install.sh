@@ -12,8 +12,8 @@ XRAY_CFG=/usr/local/etc/xray/config.json
 STATE_FILE=/usr/local/etc/xray/.vlessextra.env
 WEB_PATH=/var/www/vless
 
-REALITY_DEST="web.max.ru"
-REALITY_SNI="web.max.ru"
+REALITY_DEST="www.amd.com"
+REALITY_SNI="www.amd.com"
 XRAY_PORT=443
 PROXY_NAME="VlessExtra"
 
