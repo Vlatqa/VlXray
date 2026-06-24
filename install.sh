@@ -176,7 +176,7 @@ tun:
   auto-detect-interface: true
   dns-hijack:
     - "any:53"
-  mtu: 1240
+  mtu: 1400
 
 dns:
   enable: true
