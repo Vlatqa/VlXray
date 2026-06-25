@@ -12,8 +12,8 @@ XRAY_CFG=/usr/local/etc/xray/config.json
 STATE_FILE=/usr/local/etc/xray/.vlessextra.env
 WEB_PATH=/var/www/vless
 
-REALITY_DEST="www.bol.com"
-REALITY_SNI="www.bol.com"
+REALITY_DEST="www.microsoft.com"
+REALITY_SNI="www.microsoft.com"
 XRAY_PORT=443
 PROXY_NAME="VlessExtra"
 
