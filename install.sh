@@ -36,7 +36,8 @@ WARP_GEO=(
 #    "domain:voidboost.cc"
 #    "domain:sambray.org"
 #    "domain:alicdn.com"
-#    "domain:ixbt.com"
+    "domain:reichelcormier.bid"
+    "domain:getter.fun"
 )
 
 # ─────────── РЕЖИМ WARP: раскомментируй ОДИН вариант ───────────
