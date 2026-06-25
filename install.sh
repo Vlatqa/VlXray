@@ -33,11 +33,10 @@ WARP_GEO=(
 #    "geosite:alphabet"
 #    "geosite:category-ai-!cn"
 #    "domain:metal-tracker.com"
-    "domain:voidboost.cc"
-    "domain:sambray.org"
+#    "domain:voidboost.cc"
+#    "domain:sambray.org"
 #    "domain:alicdn.com"
 #    "domain:ixbt.com"
-    "domain:rezka.ag"
 )
 
 # ─────────── РЕЖИМ WARP: раскомментируй ОДИН вариант ───────────
