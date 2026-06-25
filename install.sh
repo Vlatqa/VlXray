@@ -37,6 +37,7 @@ WARP_GEO=(
 #    "domain:sambray.org"
 #    "domain:alicdn.com"
     "domain:reichelcormier.bid"
+    "domain:rezka.ag"
     "domain:getter.fun"
 )
 
