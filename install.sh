@@ -13,8 +13,8 @@ STATE_FILE=/usr/local/etc/xray/.vlessextra.env
 WEB_PATH=/var/www/vless
 
 # ─────────────────────────── НАСТРОЙКИ ───────────────────────────
-REALITY_DEST="www.google.com"   # чужой сайт для маскировки (target)
-REALITY_SNI="www.google.com"    # SNI (= домен из сертификата dest)
+REALITY_DEST="www.microsoft.com"   # чужой сайт для маскировки (target)
+REALITY_SNI="www.microsoft.com"    # SNI (= домен из сертификата dest)
 XRAY_PORT=443
 PROXY_NAME="VlessExtra"
 
