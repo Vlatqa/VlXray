@@ -1,5 +1,5 @@
 #!/bin/bash
-# Vless Extra — VLESS + Reality + Vision (TCP) на Xray-core
+# Vless Extra — VLESS + XHTTP + Reality (self-steal) + VLESS Encryption + Vision на Xray-core
 
 GRN='\033[1;32m'
 RED='\033[1;31m'
@@ -11,11 +11,15 @@ NC='\033[0m'
 XRAY_CFG=/usr/local/etc/xray/config.json
 STATE_FILE=/usr/local/etc/xray/.vlessextra.env
 WEB_PATH=/var/www/vless
+ACME_PATH=/var/www/acme
+CERT_HOOK=/etc/letsencrypt/renewal-hooks/deploy/vlessextra-nginx.sh
 
 # ─────────────────────────── НАСТРОЙКИ ───────────────────────────
-REALITY_DEST="www.microsoft.com"   # чужой сайт для маскировки (target)
-REALITY_SNI="www.microsoft.com"    # SNI (= домен из сертификата dest)
+DOMAIN=""               # ваш домен; A-запись должна указывать на IP этого сервера (обязательно)
+EMAIL=""                # почта для Let's Encrypt (уведомления об истечении); можно оставить пустой
 XRAY_PORT=443
+NGINX_TLS_PORT=8443     # nginx с сайтом-маскировкой, слушает ТОЛЬКО 127.0.0.1 (Reality target)
+XMUX_MAX_CONN=1         # xmux maxConnections для клиента (JSON и ссылка)
 PROXY_NAME="VlessExtra"
 
 # DNS (DoH). Используется:
@@ -42,6 +46,12 @@ CLIENT_DIRECT=(
 CLIENT_ROUTING_STRATEGY="AsIs"
 # ─────────────────────────────────────────────────────────────────
 
+check_settings() {
+    [ -n "$DOMAIN" ] || { echo -e "${RED}❌ заполни DOMAIN в шапке скрипта${NC}"; exit 1; }
+    [[ "$XMUX_MAX_CONN" =~ ^[0-9]+$ ]] || { echo -e "${RED}❌ XMUX_MAX_CONN должен быть числом${NC}"; exit 1; }
+    [[ "$NGINX_TLS_PORT" =~ ^[0-9]+$ ]] || { echo -e "${RED}❌ NGINX_TLS_PORT должен быть числом${NC}"; exit 1; }
+}
+
 save_state() {
     mkdir -p "$(dirname "$STATE_FILE")"
     cat > "$STATE_FILE" <<EOF
@@ -50,6 +60,9 @@ UUID="$UUID"
 PRIV="$PRIV"
 PUB="$PUB"
 SHORTID="$SHORTID"
+ENC_PRIV="$ENC_PRIV"
+ENC_PASS="$ENC_PASS"
+XHTTP_PATH="$XHTTP_PATH"
 path_page="$path_page"
 path_json="$path_json"
 EOF
@@ -87,6 +100,23 @@ html_escape() {
     printf '%s' "$s"
 }
 
+# Пара ключей x25519: печатает "<private> <public/password>".
+# Разбор устойчив к разным версиям вывода `xray x25519`.
+x25519_pair() {
+    local out priv pub
+    out=$(xray x25519) || return 1
+    priv=$(echo "$out" | grep -i 'private' | head -n1 | awk '{print $NF}')
+    pub=$(echo  "$out" | grep -iE 'password|public' | head -n1 | awk '{print $NF}')
+    [ -n "$priv" ] && [ -n "$pub" ] || return 1
+    echo "$priv $pub"
+}
+
+# Строки VLESS Encryption: сервер — decryption (PrivateKey), клиент — encryption (Password).
+gen_enc_strings() {
+    VLESS_DEC="mlkem768x25519plus.native.600s.$ENC_PRIV"
+    VLESS_ENC="mlkem768x25519plus.native.0rtt.$ENC_PASS"
+}
+
 # Проверка конфига самим Xray. $1 — файл.
 xray_test() {
     xray run -test -format=json -config "$1" >/tmp/vlessextra-xray-test.log 2>&1
@@ -113,12 +143,107 @@ commit_configs() {
     return 1
 }
 
+# Проверка, что домен указывает на этот сервер.
+check_domain() {
+    local v4 v6
+    v4=$(getent ahostsv4 "$DOMAIN" | awk '{print $1}' | sort -u)
+    if ! grep -qxF "$SERVER_IP" <<< "$v4"; then
+        echo -e "${RED}❌ $DOMAIN резолвится в: ${v4:-ничего}${NC}"
+        echo -e "${RED}   а IP сервера: $SERVER_IP. Пропиши A-запись и дождись обновления DNS.${NC}"
+        exit 1
+    fi
+    if [ "$(wc -l <<< "$v4")" -gt 1 ]; then
+        echo -e "${YEL}⚠️  у $DOMAIN несколько A-записей:${NC}\n$v4\n${YEL}   Оставь только $SERVER_IP.${NC}"
+    fi
+    v6=$(getent ahostsv6 "$DOMAIN" | awk '{print $1}' | grep -v '^::ffff:' | sort -u)
+    if [ -n "$v6" ]; then
+        echo -e "${YEL}⚠️  у $DOMAIN есть AAAA-запись ($v6).${NC}"
+        echo -e "${YEL}   Если она не на этот сервер — удали её: Let's Encrypt проверяет и по IPv6.${NC}"
+    fi
+    echo -e "${GRN}✅ $DOMAIN → $SERVER_IP${NC}"
+}
+
 detect_nginx_conf() {
     if [ -f /etc/nginx/sites-available/default ]; then
         CONFIG_PATH="/etc/nginx/sites-available/default"
     else
         CONFIG_PATH="/etc/nginx/conf.d/default.conf"
     fi
+}
+
+# Синтаксис HTTP/2 зависит от версии nginx (директива "http2 on;" — с 1.25.1).
+nginx_http2_opts() {
+    local v
+    v=$(nginx -v 2>&1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -n1)
+    if [ -n "$v" ] && [ "$(printf '%s\n' 1.25.1 "$v" | sort -V | head -n1)" = "1.25.1" ]; then
+        H2_LISTEN="";       H2_DIRECTIVE="    http2 on;"
+    else
+        H2_LISTEN=" http2"; H2_DIRECTIVE=""
+    fi
+}
+
+# $1 = acme — только порт 80 (для выпуска сертификата);
+# $1 = full — порт 80 + TLS-сайт на 127.0.0.1:NGINX_TLS_PORT.
+gen_nginx_config() {
+    detect_nginx_conf
+    nginx_http2_opts
+    {
+    cat <<EOF
+server {
+    listen 80 default_server;
+    server_name _;
+    location ^~ /.well-known/acme-challenge/ { root $ACME_PATH; default_type text/plain; }
+    location / { return 301 https://$DOMAIN\$request_uri; }
+}
+EOF
+    if [ "$1" = "full" ]; then
+    cat <<EOF
+
+server {
+    listen 127.0.0.1:$NGINX_TLS_PORT ssl$H2_LISTEN default_server;
+$H2_DIRECTIVE
+    server_name $DOMAIN;
+    ssl_certificate     /etc/letsencrypt/live/$DOMAIN/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/$DOMAIN/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    root $WEB_PATH;
+    index index.html;
+    location ~ /\. { deny all; }
+}
+EOF
+    fi
+    } > "$CONFIG_PATH"
+}
+
+apply_nginx() {
+    if nginx -t >/tmp/vlessextra-nginx-test.log 2>&1; then
+        systemctl reload nginx 2>/dev/null || systemctl restart nginx
+    else
+        echo -e "${RED}❌ nginx не принял конфиг:${NC}"
+        cat /tmp/vlessextra-nginx-test.log
+        return 1
+    fi
+}
+
+# Выпускает сертификат, если его ещё нет, и ставит хук перезагрузки nginx при продлении.
+ensure_cert() {
+    if [ ! -f "/etc/letsencrypt/live/$DOMAIN/fullchain.pem" ]; then
+        mkdir -p "$ACME_PATH"
+        gen_nginx_config acme
+        apply_nginx || return 1
+        local mail_opt=(--register-unsafely-without-email)
+        [ -n "$EMAIL" ] && mail_opt=(-m "$EMAIL")
+        echo -e "${YEL}Выпуск сертификата Let's Encrypt для $DOMAIN...${NC}"
+        if ! certbot certonly --webroot -w "$ACME_PATH" -d "$DOMAIN" --cert-name "$DOMAIN" \
+                --non-interactive --agree-tos "${mail_opt[@]}"; then
+            echo -e "${RED}❌ сертификат не выпущен. Проверь A-запись домена и что TCP 80 открыт (фаервол, панель хостера).${NC}"
+            return 1
+        fi
+    fi
+    mkdir -p "$(dirname "$CERT_HOOK")"
+    printf '#!/bin/sh\nsystemctl reload nginx\n' > "$CERT_HOOK"
+    chmod 755 "$CERT_HOOK"
+    echo -e "${GRN}✅ Сертификат для $DOMAIN на месте (автопродление — certbot timer)${NC}"
 }
 
 gen_xray_config() {
@@ -135,11 +260,22 @@ gen_xray_config() {
       "listen": "0.0.0.0",
       "port": $XRAY_PORT,
       "protocol": "vless",
-      "settings": { "clients": [ { "id": "$UUID", "flow": "xtls-rprx-vision" } ], "decryption": "none" },
+      "settings": {
+        "clients": [ { "id": "$UUID", "flow": "xtls-rprx-vision" } ],
+        "decryption": "$VLESS_DEC"
+      },
       "streamSettings": {
-        "network": "tcp",
+        "network": "xhttp",
+        "xhttpSettings": { "path": "/$XHTTP_PATH", "mode": "auto" },
         "security": "reality",
-        "realitySettings": { "show": false, "target": "$REALITY_DEST:443", "xver": 0, "serverNames": ["$REALITY_SNI"], "privateKey": "$PRIV", "shortIds": ["$SHORTID"] }
+        "realitySettings": {
+          "show": false,
+          "target": "127.0.0.1:$NGINX_TLS_PORT",
+          "xver": 0,
+          "serverNames": ["$DOMAIN"],
+          "privateKey": "$PRIV",
+          "shortIds": ["$SHORTID"]
+        }
       },
       "sniffing": { "enabled": true, "destOverride": ["http", "tls", "quic"] }
     }
@@ -154,19 +290,6 @@ gen_xray_config() {
       { "type": "field", "ip": ["geoip:private"], "outboundTag": "block" }
     ]
   }
-}
-EOF
-}
-
-gen_nginx_config() {
-    detect_nginx_conf
-    cat > "$CONFIG_PATH" <<EOF
-server {
-    listen 80 default_server;
-    server_name _;
-    root $WEB_PATH;
-    index index.html;
-    location ~ /\.ht { deny all; }
 }
 EOF
 }
@@ -207,8 +330,21 @@ gen_client_json() {
     {
       "tag": "proxy",
       "protocol": "vless",
-      "settings": { "vnext": [ { "address": "$SERVER_IP", "port": $XRAY_PORT, "users": [ { "id": "$UUID", "encryption": "none", "flow": "xtls-rprx-vision" } ] } ] },
-      "streamSettings": { "network": "tcp", "security": "reality", "realitySettings": { "serverName": "$REALITY_SNI", "fingerprint": "chrome", "publicKey": "$PUB", "shortId": "$SHORTID", "spiderX": "" } }
+      "settings": {
+        "vnext": [ { "address": "$SERVER_IP", "port": $XRAY_PORT, "users": [
+          { "id": "$UUID", "encryption": "$VLESS_ENC", "flow": "xtls-rprx-vision" }
+        ] } ]
+      },
+      "streamSettings": {
+        "network": "xhttp",
+        "xhttpSettings": {
+          "path": "/$XHTTP_PATH",
+          "mode": "auto",
+          "extra": { "xmux": { "maxConnections": $XMUX_MAX_CONN } }
+        },
+        "security": "reality",
+        "realitySettings": { "serverName": "$DOMAIN", "fingerprint": "chrome", "publicKey": "$PUB", "shortId": "$SHORTID", "spiderX": "" }
+      }
     },
     { "tag": "direct", "protocol": "freedom", "settings": { "targetStrategy": "UseIPv4" } },
     { "tag": "block", "protocol": "blackhole" }
@@ -225,7 +361,9 @@ EOF
 }
 
 gen_link() {
-    linkVL="vless://${UUID}@${SERVER_IP}:${XRAY_PORT}?encryption=none&flow=xtls-rprx-vision&security=reality&sni=${REALITY_SNI}&fp=chrome&pbk=${PUB}&sid=${SHORTID}&type=tcp&headerType=none#$(urlencode "$PROXY_NAME")"
+    local extra
+    extra=$(urlencode "{\"xmux\":{\"maxConnections\":$XMUX_MAX_CONN}}")
+    linkVL="vless://${UUID}@${SERVER_IP}:${XRAY_PORT}?encryption=$(urlencode "$VLESS_ENC")&flow=xtls-rprx-vision&security=reality&sni=${DOMAIN}&fp=chrome&pbk=${PUB}&sid=${SHORTID}&type=xhttp&path=$(urlencode "/$XHTTP_PATH")&mode=auto&extra=${extra}#$(urlencode "$PROXY_NAME")"
 }
 
 gen_html() {
@@ -238,7 +376,7 @@ gen_html() {
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <meta name="robots" content="noindex,nofollow">
-<title>VLESS</title>
+<title>Configs</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <style>
   *{box-sizing:border-box}
@@ -274,19 +412,19 @@ window.onclick=function(e){if(e.target===document.getElementById("qrModal"))clos
 <div class="wrap">
   <div class="block">
     <div class="head">
-      <span class="t">Клиенты на ядре Xray / sing-box</span>
-      <b>HAPP</b>, <b>v2RayTun</b>, <b>OneXray</b>, <b>v2rayN</b> и подобные. По <b>Ссылке / QR</b> роутинг настраиваешь сам; <b>JSON</b> — роутинг и DNS уже настроены.
+      <span class="t">Клиенты на ядре Xray (нужна поддержка VLESS Encryption и XHTTP)</span>
+      <b>HAPP</b>, <b>v2RayTun</b>, <b>OneXray</b>, <b>v2rayN</b> и подобные. <b>JSON</b> — роутинг, DNS и xmux уже настроены. По <b>Ссылке / QR</b> роутинг настраиваешь сам; xmux передаётся в параметре <b>extra</b> (работает, если клиент его читает).
+    </div>
+    <div class="row">
+      <div class="label">JSON</div>
+      <div class="code" id="c3">https://$DOMAIN/$path_json</div>
+      <a class="btn open" href="https://$DOMAIN/$path_json" target="_blank" rel="noopener">Open</a>
+      <a class="btn qr" href="https://$DOMAIN/$path_json" download="vlessextra.json">Download</a>
     </div>
     <div class="row">
       <div class="label">Ссылка</div>
       <div class="code" id="c1">$link_html</div>
       <button class="btn qr" onclick="showQR('c1')">QR</button>
-    </div>
-    <div class="row">
-      <div class="label">JSON</div>
-      <div class="code" id="c3">http://$SERVER_IP/$path_json</div>
-      <a class="btn open" href="http://$SERVER_IP/$path_json" target="_blank" rel="noopener">Open</a>
-      <a class="btn qr" href="http://$SERVER_IP/$path_json" download="vlessextra.json">Download</a>
     </div>
   </div>
 </div>
@@ -375,33 +513,48 @@ print_status() {
 print_summary() {
     echo -e "
 ${YEL}Страница с конфигами:${NC}
-${GRN}http://$SERVER_IP/$path_page${NC}
+${GRN}https://$DOMAIN/$path_page${NC}
 
-${YEL}Сервер:${NC} $SERVER_IP:$XRAY_PORT  ${YEL}SNI:${NC} $REALITY_SNI  ${YEL}DNS:${NC} $DNS_SERVER
+${YEL}Сервер:${NC} $SERVER_IP:$XRAY_PORT  ${YEL}SNI:${NC} $DOMAIN  ${YEL}path:${NC} /$XHTTP_PATH
+${YEL}Reality target:${NC} 127.0.0.1:$NGINX_TLS_PORT  ${YEL}DNS:${NC} $DNS_SERVER
 "
 }
 
+# ═══════════════════════════ UPDATE ═══════════════════════════
 if [ "$1" = "update" ]; then
     echo -e "${YEL}=== Режим обновления конфигов ===${NC}"
-    # шапка важнее state: старые state-файлы ещё содержат dest/SNI/порт/имя
-    _DEST="$REALITY_DEST"; _SNI="$REALITY_SNI"; _PORT="$XRAY_PORT"; _NAME="$PROXY_NAME"
+    # шапка важнее state
+    _DOMAIN="$DOMAIN"; _EMAIL="$EMAIL"; _PORT="$XRAY_PORT"; _NGX="$NGINX_TLS_PORT"; _XMUX="$XMUX_MAX_CONN"; _NAME="$PROXY_NAME"
     load_state
-    REALITY_DEST="$_DEST"; REALITY_SNI="$_SNI"; XRAY_PORT="$_PORT"; PROXY_NAME="$_NAME"
+    DOMAIN="$_DOMAIN"; EMAIL="$_EMAIL"; XRAY_PORT="$_PORT"; NGINX_TLS_PORT="$_NGX"; XMUX_MAX_CONN="$_XMUX"; PROXY_NAME="$_NAME"
+    check_settings
     cleanup_legacy
     command -v xray >/dev/null || { echo -e "${RED}❌ xray не найден. Сначала установка.${NC}"; exit 1; }
+    command -v certbot >/dev/null || apt-get install -y certbot || { echo -e "${RED}❌ не удалось поставить certbot${NC}"; exit 1; }
     mkdir -p "$WEB_PATH"
-    [ -z "$path_json" ] && path_json="$(rand_name).json"
+    [ -z "$path_json" ]  && path_json="$(rand_name).json"
+    [ -z "$path_page" ]  && path_page="$(rand_name).html"
+    [ -z "$XHTTP_PATH" ] && XHTTP_PATH="$(rand_name)"
+    if [ -z "$ENC_PRIV" ] || [ -z "$ENC_PASS" ]; then
+        read -r ENC_PRIV ENC_PASS <<< "$(x25519_pair)"
+        [ -n "$ENC_PASS" ] || { echo -e "${RED}❌ не удалось сгенерировать ключи VLESS Encryption${NC}"; exit 1; }
+    fi
+    [ -f "$WEB_PATH/index.html" ] || gen_masking_site
 
+    check_domain
+    open_ufw
+    ensure_cert || exit 1
+
+    gen_enc_strings
     gen_xray_config
     gen_client_json
     commit_configs || exit 1
-    gen_nginx_config
+    gen_nginx_config full
+    apply_nginx || exit 1
     gen_link
     gen_html
     save_state
-    open_ufw
 
-    nginx -t && systemctl reload nginx
     systemctl restart xray
     sleep 1
 
@@ -411,11 +564,14 @@ if [ "$1" = "update" ]; then
     exit 0
 fi
 
+# ═══════════════════════════ INSTALL ═══════════════════════════
+check_settings
+
 echo -e "${YEL}Обновление и установка пакетов...${NC}"
 export DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a
 apt-get update
 apt-get -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold upgrade -y
-apt-get install -y curl openssl nginx || { echo -e "${RED}❌ не удалось поставить пакеты${NC}"; exit 1; }
+apt-get install -y curl openssl nginx certbot || { echo -e "${RED}❌ не удалось поставить пакеты${NC}"; exit 1; }
 systemctl enable --now nginx
 
 cat > /etc/sysctl.d/999-vlessextra.conf <<EOF
@@ -434,6 +590,13 @@ done
 [ -z "$SERVER_IP" ] && { echo -e "${RED}❌ не удалось определить публичный IPv4 сервера${NC}"; exit 1; }
 echo -e "${GRN}IP сервера: $SERVER_IP${NC}"
 
+check_domain
+open_ufw
+
+mkdir -p "$WEB_PATH"
+gen_masking_site
+ensure_cert || exit 1
+
 XRAY_INSTALLER=$(curl -fsSL https://github.com/XTLS/Xray-install/raw/main/install-release.sh)
 [ -n "$XRAY_INSTALLER" ] || { echo -e "${RED}❌ не скачался установщик Xray (DNS/сеть до GitHub?). Проверь getent hosts github.com${NC}"; exit 1; }
 bash -c "$XRAY_INSTALLER" @ install
@@ -444,35 +607,35 @@ fi
 echo -e "${GRN}✅ Xray установлен: $(xray version | head -n1)${NC}"
 
 UUID=$(cat /proc/sys/kernel/random/uuid)
-KEYS=$(xray x25519)
-PRIV=$(echo "$KEYS" | grep -i 'privatekey\|private key' | awk '{print $NF}')
-PUB=$(echo  "$KEYS" | grep -i 'publickey\|public key'   | awk '{print $NF}')
-[ -n "$PRIV" ] && [ -n "$PUB" ] || { echo -e "${RED}❌ не удалось получить ключи из 'xray x25519':${NC}\n$KEYS"; exit 1; }
+read -r PRIV PUB <<< "$(x25519_pair)"
+[ -n "$PUB" ] || { echo -e "${RED}❌ не удалось получить ключи Reality из 'xray x25519'${NC}"; xray x25519; exit 1; }
+read -r ENC_PRIV ENC_PASS <<< "$(x25519_pair)"
+[ -n "$ENC_PASS" ] || { echo -e "${RED}❌ не удалось получить ключи VLESS Encryption из 'xray x25519'${NC}"; exit 1; }
 SHORTID=$(openssl rand -hex 8)
+XHTTP_PATH="$(rand_name)"
 path_page="$(rand_name).html"
 path_json="$(rand_name).json"
 
-mkdir -p "$WEB_PATH"
-gen_masking_site
+gen_enc_strings
 gen_xray_config
 gen_client_json
 commit_configs || exit 1
+
+gen_nginx_config full
+apply_nginx || exit 1
+echo -e "${GRN}✅ Nginx: :80 (ACME + редирект), 127.0.0.1:$NGINX_TLS_PORT (сайт, TLS)${NC}"
+
 systemctl enable xray
 systemctl restart xray
 sleep 1
 if systemctl is-active --quiet xray; then
-    echo -e "${GRN}✅ Xray настроен (VLESS+Reality на TCP $XRAY_PORT)${NC}"
+    echo -e "${GRN}✅ Xray настроен (VLESS+XHTTP+Reality на TCP $XRAY_PORT)${NC}"
 else
     echo -e "${RED}❌ Xray не стартовал: journalctl -u xray -e --no-pager | tail -20${NC}"
 fi
 
 gen_link
 gen_html
-gen_nginx_config
-nginx -t && systemctl restart nginx
-echo -e "${GRN}✅ Nginx настроен (страница на TCP 80)${NC}"
-
-open_ufw
 
 save_state
 echo -e "${GRN}✅ Состояние сохранено в $STATE_FILE${NC}"
