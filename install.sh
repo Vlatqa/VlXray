@@ -341,7 +341,7 @@ gen_client_json() {
         "network": "xhttp",
         "xhttpSettings": {
           "path": "/$XHTTP_PATH",
-          "mode": "auto",
+          "mode": "auto"
         },
         "security": "reality",
         "realitySettings": { "serverName": "$DOMAIN", "fingerprint": "chrome", "publicKey": "$PUB", "shortId": "$SHORTID", "spiderX": "" }
