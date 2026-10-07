@@ -320,6 +320,7 @@ gen_client_json() {
     local tmp="$WEB_PATH/.$path_json.new"
     cat > "$tmp" <<EOF
 {
+  "remarks": "VlXray",
   "dns": {
     "servers": [ "$CLIENT_DNS_SERVER" ],
     "queryStrategy": "UseIPv4"
