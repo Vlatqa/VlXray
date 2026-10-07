@@ -19,7 +19,6 @@ DOMAIN=""               # ваш домен; A-запись должна ука�
 EMAIL=""                # почта для Let's Encrypt (уведомления об истечении); можно оставить пустой
 XRAY_PORT=443
 NGINX_TLS_PORT=8443     # nginx с сайтом-маскировкой, слушает ТОЛЬКО 127.0.0.1 (Reality target)
-XMUX_MAX_CONN=1         # xmux maxConnections для клиента (JSON и ссылка)
 PROXY_NAME="VlessExtra"
 
 # DNS для клиентского JSON. Только IP, без доменного имени:
@@ -52,7 +51,6 @@ CLIENT_ROUTING_STRATEGY="AsIs"
 
 check_settings() {
     [ -n "$DOMAIN" ] || { echo -e "${RED}❌ заполни DOMAIN в шапке скрипта${NC}"; exit 1; }
-    [[ "$XMUX_MAX_CONN" =~ ^[0-9]+$ ]] || { echo -e "${RED}❌ XMUX_MAX_CONN должен быть числом${NC}"; exit 1; }
     [[ "$NGINX_TLS_PORT" =~ ^[0-9]+$ ]] || { echo -e "${RED}❌ NGINX_TLS_PORT должен быть числом${NC}"; exit 1; }
 }
 
@@ -344,7 +342,6 @@ gen_client_json() {
         "xhttpSettings": {
           "path": "/$XHTTP_PATH",
           "mode": "auto",
-          "extra": { "xmux": { "maxConnections": $XMUX_MAX_CONN } }
         },
         "security": "reality",
         "realitySettings": { "serverName": "$DOMAIN", "fingerprint": "chrome", "publicKey": "$PUB", "shortId": "$SHORTID", "spiderX": "" }
@@ -365,9 +362,7 @@ EOF
 }
 
 gen_link() {
-    local extra
-    extra=$(urlencode "{\"xmux\":{\"maxConnections\":$XMUX_MAX_CONN}}")
-    linkVL="vless://${UUID}@${SERVER_IP}:${XRAY_PORT}?encryption=$(urlencode "$VLESS_ENC")&flow=xtls-rprx-vision&security=reality&sni=${DOMAIN}&fp=chrome&pbk=${PUB}&sid=${SHORTID}&type=xhttp&path=$(urlencode "/$XHTTP_PATH")&mode=auto&extra=${extra}#$(urlencode "$PROXY_NAME")"
+    linkVL="vless://${UUID}@${SERVER_IP}:${XRAY_PORT}?encryption=$(urlencode "$VLESS_ENC")&flow=xtls-rprx-vision&security=reality&sni=${DOMAIN}&fp=chrome&pbk=${PUB}&sid=${SHORTID}&type=xhttp&path=$(urlencode "/$XHTTP_PATH")&mode=auto#$(urlencode "$PROXY_NAME")"
 }
 
 gen_html() {
@@ -417,7 +412,7 @@ window.onclick=function(e){if(e.target===document.getElementById("qrModal"))clos
   <div class="block">
     <div class="head">
       <span class="t">Клиенты на ядре Xray (нужна поддержка VLESS Encryption и XHTTP)</span>
-      <b>HAPP</b>, <b>v2RayTun</b>, <b>OneXray</b>, <b>v2rayN</b> и подобные. <b>JSON</b> — роутинг, DNS и xmux уже настроены. По <b>Ссылке / QR</b> роутинг настраиваешь сам; xmux передаётся в параметре <b>extra</b> (работает, если клиент его читает).
+            <b>HAPP</b>, <b>v2RayTun</b>, <b>OneXray</b>, <b>v2rayN</b> и подобные. <b>JSON</b> — роутинг и DNS уже настроены. По <b>Ссылке / QR</b> роутинг настраиваешь сам.
     </div>
     <div class="row">
       <div class="label">JSON</div>
@@ -528,9 +523,9 @@ ${YEL}Reality target:${NC} 127.0.0.1:$NGINX_TLS_PORT  ${YEL}DNS:${NC} $DNS_SERVE
 if [ "$1" = "update" ]; then
     echo -e "${YEL}=== Режим обновления конфигов ===${NC}"
     # шапка важнее state
-    _DOMAIN="$DOMAIN"; _EMAIL="$EMAIL"; _PORT="$XRAY_PORT"; _NGX="$NGINX_TLS_PORT"; _XMUX="$XMUX_MAX_CONN"; _NAME="$PROXY_NAME"
+    _DOMAIN="$DOMAIN"; _EMAIL="$EMAIL"; _PORT="$XRAY_PORT"; _NGX="$NGINX_TLS_PORT"; _NAME="$PROXY_NAME"
     load_state
-    DOMAIN="$_DOMAIN"; EMAIL="$_EMAIL"; XRAY_PORT="$_PORT"; NGINX_TLS_PORT="$_NGX"; XMUX_MAX_CONN="$_XMUX"; PROXY_NAME="$_NAME"
+    DOMAIN="$_DOMAIN"; EMAIL="$_EMAIL"; XRAY_PORT="$_PORT"; NGINX_TLS_PORT="$_NGX"; PROXY_NAME="$_NAME"
     check_settings
     cleanup_legacy
     command -v xray >/dev/null || { echo -e "${RED}❌ xray не найден. Сначала установка.${NC}"; exit 1; }
