@@ -22,6 +22,10 @@ NGINX_TLS_PORT=8443     # nginx с сайтом-маскировкой, слуш
 XMUX_MAX_CONN=1         # xmux maxConnections для клиента (JSON и ссылка)
 PROXY_NAME="VlessExtra"
 
+# DNS для клиентского JSON. Только IP, без доменного имени:
+# в TUN-режиме домен DNS-сервера уходит в петлю (система → TUN → Xray → тот же DNS).
+CLIENT_DNS_SERVER="https+local://94.140.14.14/dns-query"
+
 # DNS (DoH). Используется:
 #  - на сервере: резолв всех доменов, которые идут через прокси;
 #  - в клиентском JSON: резолв того, что идёт напрямую (direct).
@@ -319,7 +323,7 @@ gen_client_json() {
     cat > "$tmp" <<EOF
 {
   "dns": {
-    "servers": [ "$DNS_SERVER" ],
+    "servers": [ "$CLIENT_DNS_SERVER" ],
     "queryStrategy": "UseIPv4"
   },
   "inbounds": [
