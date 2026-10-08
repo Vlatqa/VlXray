@@ -23,7 +23,7 @@ PROXY_NAME="VlessExtra"
 
 # DNS для клиентского JSON. Только IP, без доменного имени:
 # в TUN-режиме домен DNS-сервера уходит в петлю (система → TUN → Xray → тот же DNS).
-CLIENT_DNS_SERVER="https://94.140.14.14/dns-query"
+CLIENT_DNS_SERVER="https+local://94.140.14.14/dns-query"
 
 # DNS (DoH). Используется:
 #  - на сервере: резолв всех доменов, которые идут через прокси;
@@ -342,7 +342,10 @@ gen_client_json() {
         "network": "xhttp",
         "xhttpSettings": {
           "path": "/$XHTTP_PATH",
-          "mode": "auto"
+          "mode": "auto",
+          "extra": {
+            "xmux": { "maxConnections": 1 }
+          }
         },
         "security": "reality",
         "realitySettings": { "serverName": "$DOMAIN", "fingerprint": "chrome", "publicKey": "$PUB", "shortId": "$SHORTID", "spiderX": "" }
