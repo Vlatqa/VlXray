@@ -23,7 +23,7 @@ PROXY_NAME="VlessExtra"
 
 # DNS для клиентского JSON. Только IP, без доменного имени:
 # в TUN-режиме домен DNS-сервера уходит в петлю (система → TUN → Xray → тот же DNS).
-CLIENT_DNS_SERVER="https+local://94.140.14.14/dns-query"
+CLIENT_DNS_SERVER="94.140.14.14"
 
 # DNS (DoH). Используется:
 #  - на сервере: резолв всех доменов, которые идут через прокси;
@@ -323,7 +323,8 @@ gen_client_json() {
   "remarks": "VlXray",
   "dns": {
     "servers": [ "$CLIENT_DNS_SERVER" ],
-    "queryStrategy": "UseIPv4"
+    "queryStrategy": "UseIPv4",
+    "tag": "dns-internal"
   },
   "inbounds": [
     { "tag": "socks", "listen": "127.0.0.1", "port": 10808, "protocol": "socks", "settings": { "udp": true }, "sniffing": { "enabled": true, "destOverride": ["http", "tls", "quic"] } },
@@ -355,6 +356,7 @@ gen_client_json() {
   "routing": {
     "domainStrategy": "$CLIENT_ROUTING_STRATEGY",
     "rules": [
+      { "type": "field", "inboundTag": ["dns-internal"], "outboundTag": "direct" },
       { "type": "field", "port": "53", "outboundTag": "dns-out" },
       { "type": "field", "protocol": ["bittorrent"], "outboundTag": "direct" },
       { "type": "field", "ip": ["geoip:private"], "outboundTag": "direct" }$(build_client_direct_rules)
