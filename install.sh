@@ -31,10 +31,6 @@ CLIENT_DNS_SERVER="https+local://94.140.14.14/dns-query"
 # "+local" обязателен: запрос к DoH идёт напрямую, а не через роутинг Xray.
 DNS_SERVER="https+local://dns.adguard-dns.com/dns-query"
 
-CLIENT_GEOSITE_URL="https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geosite.dat"
-CLIENT_GEODATA_CRON="0 4 * * *"    # по локальному времени клиента
-CLIENT_GEODATA_OUTBOUND="proxy"    # через что качать: proxy или direct
-
 # Что клиент (JSON) пускает НАПРЯМУЮ, мимо прокси.
 # Синтаксис Xray-роутинга:
 #   домены: "geosite:...", "domain:...", "full:...", "keyword:...", "regexp:..."
@@ -56,7 +52,6 @@ CLIENT_ROUTING_STRATEGY="AsIs"
 check_settings() {
     [ -n "$DOMAIN" ] || { echo -e "${RED}❌ заполни DOMAIN в шапке скрипта${NC}"; exit 1; }
     [[ "$NGINX_TLS_PORT" =~ ^[0-9]+$ ]] || { echo -e "${RED}❌ NGINX_TLS_PORT должен быть числом${NC}"; exit 1; }
-    [ -z "$CLIENT_GEOSITE_URL" ] || [[ "$CLIENT_GEOSITE_URL" == https://* ]] || { echo -e "${RED}❌ CLIENT_GEOSITE_URL должен начинаться с https://${NC}"; exit 1; }
 }
 
 save_state() {
@@ -321,21 +316,11 @@ build_client_direct_rules() {
     printf '%s' "$rules"
 }
 
-build_client_geodata() {
-    [ -n "$CLIENT_GEOSITE_URL" ] || return 0
-    printf '
-"geodata": {
-"cron": "%s",
-"outbound": "%s",
-"assets": [ { "url": "%s", "file": "geosite.dat" } ]
-},' "$CLIENT_GEODATA_CRON" "$CLIENT_GEODATA_OUTBOUND" "$CLIENT_GEOSITE_URL"
-}
-
 gen_client_json() {
     local tmp="$WEB_PATH/.$path_json.new"
     cat > "$tmp" <<EOF
 {
-  "remarks": "VlXray",$(build_client_geodata)
+  "remarks": "VlXray",
   "dns": {
     "servers": [ "$CLIENT_DNS_SERVER" ],
     "queryStrategy": "UseIPv4"
