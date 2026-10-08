@@ -342,10 +342,7 @@ gen_client_json() {
         "network": "xhttp",
         "xhttpSettings": {
           "path": "/$XHTTP_PATH",
-          "mode": "auto",
-          "extra": {
-            "xmux": { "maxConnections": 1 }
-          }
+          "mode": "auto"
         },
         "security": "reality",
         "realitySettings": { "serverName": "$DOMAIN", "fingerprint": "chrome", "publicKey": "$PUB", "shortId": "$SHORTID", "spiderX": "" }
