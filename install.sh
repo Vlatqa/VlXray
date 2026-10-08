@@ -349,11 +349,13 @@ gen_client_json() {
       }
     },
     { "tag": "direct", "protocol": "freedom", "settings": { "targetStrategy": "UseIPv4" } },
-    { "tag": "block", "protocol": "blackhole" }
+    { "tag": "block", "protocol": "blackhole" },
+    { "tag": "dns-out", "protocol": "dns" }
   ],
   "routing": {
     "domainStrategy": "$CLIENT_ROUTING_STRATEGY",
     "rules": [
+      { "type": "field", "port": "53", "outboundTag": "dns-out" },
       { "type": "field", "protocol": ["bittorrent"], "outboundTag": "direct" },
       { "type": "field", "ip": ["geoip:private"], "outboundTag": "direct" }$(build_client_direct_rules)
     ]
@@ -487,15 +489,6 @@ gen_masking_site() {
 EOF
 }
 
-# Убирает то, что осталось от старых версий скрипта (Clash .yml с ключами на веб-странице).
-cleanup_legacy() {
-    if [ -n "$path_yml" ] && [ -f "$WEB_PATH/$path_yml" ]; then
-        rm -f "$WEB_PATH/$path_yml"
-        echo -e "${YEL}Удалён старый Clash-конфиг $WEB_PATH/$path_yml${NC}"
-    fi
-    unset path_yml WARP_PRIV WARP_V6
-}
-
 open_ufw() {
     if command -v ufw >/dev/null && ufw status | grep -q "Status: active"; then
         ufw allow "$XRAY_PORT"/tcp >/dev/null
@@ -528,7 +521,6 @@ if [ "$1" = "update" ]; then
     load_state
     DOMAIN="$_DOMAIN"; EMAIL="$_EMAIL"; XRAY_PORT="$_PORT"; NGINX_TLS_PORT="$_NGX"; PROXY_NAME="$_NAME"
     check_settings
-    cleanup_legacy
     command -v xray >/dev/null || { echo -e "${RED}❌ xray не найден. Сначала установка.${NC}"; exit 1; }
     command -v certbot >/dev/null || apt-get install -y certbot || { echo -e "${RED}❌ не удалось поставить certbot${NC}"; exit 1; }
     mkdir -p "$WEB_PATH"
